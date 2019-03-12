@@ -5,7 +5,7 @@ var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 var mongoose = require("mongoose");
 var session = require('express-session');
-var store = require("session-file-store")(session);
+var FileStore = require("session-file-store")(session);
 
 
 var indexRouter = require('./routes/index');
@@ -36,10 +36,20 @@ app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser('12345-67890-98765-43210'));
+app.use(session({
+  name: 'session-id',
+  secret: "12345-67890-98765-43210",
+  saveUninitialized: false,
+  resave: false,
+  store: new FileStore()
+}))
+
+
 
 function auth(req, res, next) {
-  console.log(req.signedCookies);
-  if (!req.signedCookies.user) {
+  // console.log(req.signedCookies);
+  console.log(req.session)
+  if (!req.session.user) {
     // expect user to authenticate him/herself
     var authHeader = req.headers.authorization;
     if (!authHeader) {
@@ -56,7 +66,8 @@ function auth(req, res, next) {
 
     if (username === 'admin' && password === "password") {
       console.log("sending back cookie")
-      res.cookie('user', 'admin', { signed: true });
+      // res.cookie('user', 'admin', { signed: true });
+      req.session.user = "admin";
       next()
     }
     else {
@@ -67,7 +78,7 @@ function auth(req, res, next) {
     }
   }
   else {
-    if (req.signedCookies.user === 'admin') {
+    if (req.session.user === 'admin') {
       next();
     }
     else {
@@ -81,13 +92,6 @@ function auth(req, res, next) {
 
 // authentication
 app.use(auth);
-// app.use(session({
-//   name: 'session-id',
-//   secret: "12345",
-//   saveUninitialized: false,
-//   resave: false,
-//   store: new FileStore()
-// }))
 // serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
