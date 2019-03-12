@@ -4,6 +4,8 @@ var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 var mongoose = require("mongoose");
+var session = require('express-session');
+var store = require("session-file-store")(session);
 
 
 var indexRouter = require('./routes/index');
@@ -33,39 +35,59 @@ app.set('view engine', 'jade');
 app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-app.use(cookieParser());
+app.use(cookieParser('12345-67890-98765-43210'));
 
 function auth(req, res, next) {
-  console.log(req.headers);
-  var authHeader = req.headers.authorization;
-  if (!authHeader) {
-    var err = new Error('You are not authenticated!')
-    res.setHeader("WWW-Authenticate", "Basic");
-    err.status = 401;
-    return next(err);
-  }
+  console.log(req.signedCookies);
+  if (!req.signedCookies.user) {
+    // expect user to authenticate him/herself
+    var authHeader = req.headers.authorization;
+    if (!authHeader) {
+      var err = new Error('You are not authenticated!')
+      res.setHeader("WWW-Authenticate", "Basic");
+      err.status = 401;
+      return next(err);
+    }
 
-  var auth = new Buffer(authHeader.split(' ')[1], 'base64').toString().split(':');
+    var auth = new Buffer.from(authHeader.split(' ')[1], 'base64').toString().split(':');
 
-  var username = auth[0];
-  var password = auth[1];
+    var username = auth[0];
+    var password = auth[1];
 
-  if (username === 'admin' && password === "password") {
-    next()
+    if (username === 'admin' && password === "password") {
+      console.log("sending back cookie")
+      res.cookie('user', 'admin', { signed: true });
+      next()
+    }
+    else {
+      var err = new Error('You are not authenticated!')
+      res.setHeader("WWW-Authenticate", "Basic");
+      err.status = 401;
+      return next(err);
+    }
   }
   else {
-    var err = new Error('You are not authenticated!')
-    res.setHeader("WWW-Authenticate", "Basic");
-    err.status = 401;
-    return next(err);
+    if (req.signedCookies.user === 'admin') {
+      next();
+    }
+    else {
+      var err = new Error('You are not authenticated as admin!')
+      err.status = 401;
+      return next(err);
+    }
   }
-
-
 };
 
 
 // authentication
 app.use(auth);
+// app.use(session({
+//   name: 'session-id',
+//   secret: "12345",
+//   saveUninitialized: false,
+//   resave: false,
+//   store: new FileStore()
+// }))
 // serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
